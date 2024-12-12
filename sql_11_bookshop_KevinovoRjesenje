@@ -1,0 +1,106 @@
+# Slajd 77 u prezentaciji
+
+# Kreirajte aplikaciju koja će biti katalog knjiga dostupnih u Bookshopu.
+# Za svaku knjigu treba čuvati podatke o nazivu, autoru, izdavaču, cijeni i raspoloživosti
+# Za svakog autora treba čuvati podatke o imenu i prezimenu te knjigama koje je napisao
+# Podaci o svakom izdavaču su naziv, lista autora s kojima rade te lista izdanih knjiga
+
+# 1 knjiga -> 1 autor i 1 izdavač
+# 1 autor -> list["Knjiga"] i 1 izdavač
+# 1 izdavač -> list["Autor"] i list["Knjiga"]
+
+# Autor ima foreign key na Izdavac
+# Knjiga ima foreign key na Izdavac i Autor
+
+# !!! Koristite pretpostavku da 1 autor radi s isključivo 1 izdavačem. Inače će se dogoditi veza M:N !!!
+# Koristite SQLAlchemy ili SQLModel
+# Koristite dokumentaciju i internet, primjere s nastave
+# Opcionalno: stavite na svoj GitHub račun
+
+from sqlmodel import SQLModel, Field, create_engine, Session, Relationship, select
+from datetime import date
+
+
+class Izdavac(SQLModel, table=True):
+    id: int = Field(default=None, primary_key=True)
+    naziv: str
+
+    autori: list["Autor"] = Relationship(back_populates="izdavac")
+    knjige: list["Knjiga"] = Relationship(back_populates="izdavac")
+
+
+class Autor(SQLModel, table=True):
+    id: int = Field(default=None, primary_key=True)
+    ime: str
+    prezime: str
+
+    izdavac_id: int = Field(foreign_key="izdavac.id")
+
+    knjige: list["Knjiga"] = Relationship(back_populates="autor")
+    izdavac: Izdavac = Relationship(back_populates="autori")
+
+
+class Knjiga(SQLModel, table=True):
+    id: int = Field(default=None, primary_key=True)
+    naziv: str
+    cijena: float
+    raspolozivost: bool  # True = dostupno, False nedostupno
+    datum_izdavanja: date
+
+    autor_id: int = Field(foreign_key="autor.id")
+    izdavac_id: int = Field(foreign_key="izdavac.id")
+
+    autor: Autor = Relationship(back_populates="knjige")
+    izdavac: Izdavac = Relationship(back_populates="knjige")
+
+engine = create_engine("sqlite:///bookshop.db")
+SQLModel.metadata.create_all(engine)
+
+
+with Session(engine) as session:
+    izdavac1 = Izdavac(naziv="Izdavačka kuća A")
+    izdavac2 = Izdavac(naziv="Izdavačka kuća B")
+    session.add(izdavac1)
+    session.add(izdavac2)
+
+    autor1 = Autor(ime="Marko", prezime="Marković", izdavac=izdavac1)
+    autor2 = Autor(ime="Ana", prezime="Anić", izdavac=izdavac2)
+    session.add(autor1)
+    session.add(autor2)
+
+    knjiga1 = Knjiga(
+        naziv="Knjiga 1",
+        autor=autor1,
+        izdavac=izdavac1,
+        cijena=150.0,
+        raspolozivost=True,
+        datum_izdavanja=date(2023, 5, 1),
+    )
+    knjiga2 = Knjiga(
+        naziv="Knjiga 2",
+        autor=autor1,
+        izdavac=izdavac1,
+        cijena=200.0,
+        raspolozivost=False,
+        datum_izdavanja=date(2022, 3, 15),
+    )
+    knjiga3 = Knjiga(
+        naziv="Knjiga 3",
+        autor=autor2,
+        izdavac=izdavac2,
+        cijena=120.0,
+        raspolozivost=True,
+        datum_izdavanja=date(2021, 7, 10),
+    )
+    session.add(knjiga1)
+    session.add(knjiga2)
+    session.add(knjiga3)
+
+    session.commit()
+
+
+with Session(engine) as session:
+    knjige = session.exec(select(Knjiga)).all()
+
+    for knjiga in knjige:
+        print(f"Knjiga: {knjiga.naziv}, Autor: {knjiga.autor.ime} {knjiga.autor.prezime}, Izdavač: {knjiga.izdavac.naziv}, Cijena: {knjiga.cijena}, Raspoloživost: {'Dostupno' if knjiga.raspolozivost else 'Nedostupno'}, Datum izdavanja: {knjiga.datum_izdavanja}")
